@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stardust canvas player</title>
+<style>
+  :root { --bg: #14161b; --panel: rgba(24,27,34,.88); --line: rgba(255,255,255,.09); --text: #d7dbe3; --dim: #8b93a3; --accent: #ffb547; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text); background: var(--bg); }
+  #stage { position: fixed; inset: 0; background: radial-gradient(ellipse at 50% 40%, #232834 0%, #14161b 70%); }
+  #stage.light { background: #e9ebef; }
+  #stage.black { background: #000; }
+  #stage.checker { background-color: #2a2d35; background-image: linear-gradient(45deg,#343843 25%,transparent 25%,transparent 75%,#343843 75%),linear-gradient(45deg,#343843 25%,transparent 25%,transparent 75%,#343843 75%); background-size: 24px 24px; background-position: 0 0, 12px 12px; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+  #panel { position: fixed; top: 12px; left: 12px; width: 268px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(8px); padding: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+  #panel h1 { margin: 0 0 10px; font-size: 13px; font-weight: 600; letter-spacing: .02em; display: flex; align-items: center; gap: 8px; }
+  #panel h1 i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  #panel h1 button { margin-left: auto; padding: 0 7px; line-height: 20px; }
+  .row { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; }
+  .row label { color: var(--dim); width: 64px; flex: none; }
+  select, button { font: inherit; color: var(--text); background: #232834; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+  select { flex: 1; min-width: 0; }
+  button { cursor: pointer; }
+  button:hover, select:hover { border-color: rgba(255,255,255,.22); }
+  button.primary { background: var(--accent); color: #1a1405; border-color: transparent; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  .row.btns button { flex: 1; }
+  input[type=range] { flex: 1; accent-color: var(--accent); min-width: 0; }
+  .val { width: 38px; text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .chk { display: flex; gap: 6px; align-items: center; color: var(--dim); margin: 0 0 6px; cursor: pointer; user-select: none; }
+  .chk input { accent-color: var(--accent); margin: 0; }
+  #stats { color: var(--dim); font-variant-numeric: tabular-nums; border-top: 1px solid var(--line); padding-top: 8px; margin-top: 4px; display: flex; justify-content: space-between; }
+  #warn { margin-top: 8px; color: #f0b46a; font-size: 12px; display: none; }
+  #warn div { margin-top: 2px; }
+  #hint { position: fixed; bottom: 12px; left: 12px; color: var(--dim); font-size: 12px; opacity: .8; pointer-events: none; }
+  #stage.light ~ #hint { color: #555; }
+  #drop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(10,12,16,.72); border: 2px dashed var(--accent); font-size: 20px; color: var(--accent); z-index: 10; pointer-events: none; }
+  #drop.on { display: flex; }
+  #panel.min .body { display: none; }
+  #panel.min { width: auto; }
+  #err { position: fixed; bottom: 40px; left: 12px; max-width: 420px; background: #3a1d1d; border: 1px solid #7a3535; color: #ffb3b3; padding: 8px 12px; border-radius: 8px; display: none; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="c"></canvas></div>
+
+<div id="panel">
+  <h1><i></i>Stardust canvas player <button id="min" title="Collapse">–</button></h1>
+  <div class="body">
+    <div class="row"><label for="sims">Simulation</label><select id="sims"></select></div>
+    <div class="row btns">
+      <button id="open" class="primary">Open .sde…</button>
+      <button id="pause">Pause</button>
+      <button id="restart">Restart</button>
+    </div>
+    <div class="row"><label for="speed">Speed</label><input id="speed" type="range" min="0.1" max="3" step="0.05" value="1"><span class="val" id="speedv">1.0×</span></div>
+    <div class="row"><label for="zoom">Zoom</label><input id="zoom" type="range" min="0.3" max="2.5" step="0.05" value="1"><span class="val" id="zoomv">1.0×</span></div>
+    <div class="row"><label for="bg">Background</label>
+      <select id="bg"><option value="">Dark</option><option value="black">Black</option><option value="light">Light</option><option value="checker">Checker</option></select>
+      <button id="center" title="Move the origin back to the middle">Centre</button>
+    </div>
+    <div class="row"><label for="origin">Origin</label>
+      <select id="origin"><option value="auto">Auto</option><option value="center">Window centre</option><option value="stage">Stage top-left (fit)</option></select></div>
+    <label class="chk"><input type="checkbox" id="showbg"> Show test background (from .sde)</label>
+    <label class="chk"><input type="checkbox" id="smooth"> Smooth all textures</label>
+    <label class="chk"><input type="checkbox" id="rev"> Reverse emitter draw order</label>
+    <div id="stats"><span id="fps">– fps</span><span id="np">0 particles</span></div>
+    <div id="warn"></div>
+  </div>
+  <input type="file" id="file" accept=".sde,application/zip" style="display:none">
+</div>
+<div id="hint">Click to place the origin &nbsp;·&nbsp; drop a .sde file anywhere &nbsp;·&nbsp; Space = pause, R = restart</div>
+<div id="drop">Drop a .sde file</div>
+<div id="err"></div>
+
+<script>/*__STARDUST__*/</script>
+<script>
+var EMBEDDED_SIMS = /*__SIMS__*/;
+</script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var stage = $('stage'), canvas = $('c');
+  var player = new Stardust.Player(canvas);
+  var currentName = '';
+
+  function b64ToBytes(b64) {
+    var s = atob(b64), n = s.length, u = new Uint8Array(n);
+    for (var i = 0; i < n; i++) u[i] = s.charCodeAt(i);
+    return u;
+  }
+  function showError(msg) {
+    var e = $('err'); e.textContent = msg; e.style.display = 'block';
+    clearTimeout(showError.t); showError.t = setTimeout(function () { e.style.display = 'none'; }, 8000);
+  }
+  function showWarnings(list) {
+    var w = $('warn');
+    w.innerHTML = '';
+    if (!list || !list.length) { w.style.display = 'none'; return; }
+    list.forEach(function (m) { var d = document.createElement('div'); d.textContent = '⚠ ' + m; w.appendChild(d); });
+    w.style.display = 'block';
+  }
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    var w = stage.clientWidth, h = stage.clientHeight;
+    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    player.dpr = dpr;
+    if (!player.running) player.render();
+  }
+  window.addEventListener('resize', resize);
+
+  function loadBuffer(buf, name) {
+    return Stardust.Sim.fromSde(buf, name).then(function (sim) {
+      player.load(sim); currentName = name;
+      showWarnings(sim.warnings);
+      if (!player.running) { player.start(); }
+      $('pause').textContent = 'Pause';
+    }).catch(function (e) { console.error(e); showError('Could not load ' + name + ': ' + e.message); });
+  }
+
+  // embedded sims
+  var sel = $('sims');
+  EMBEDDED_SIMS.forEach(function (s, i) {
+    var o = document.createElement('option'); o.value = i; o.textContent = s.name; sel.appendChild(o);
+  });
+  var customOpt = null;
+  function selectEmbedded(i) { loadBuffer(b64ToBytes(EMBEDDED_SIMS[i].b64), EMBEDDED_SIMS[i].name); }
+  sel.addEventListener('change', function () { if (sel.value !== 'custom') selectEmbedded(+sel.value); });
+
+  // user files
+  function loadFile(file) {
+    var fr = new FileReader();
+    fr.onload = function () {
+      var name = file.name.replace(/\.sde$/i, '');
+      loadBuffer(fr.result, name).then(function () {
+        if (!customOpt) { customOpt = document.createElement('option'); customOpt.value = 'custom'; sel.appendChild(customOpt); }
+        customOpt.textContent = name + ' (loaded)'; sel.value = 'custom';
+      });
+    };
+    fr.onerror = function () { showError('Could not read file'); };
+    fr.readAsArrayBuffer(file);
+  }
+  $('open').addEventListener('click', function () { $('file').click(); });
+  $('file').addEventListener('change', function (e) { if (e.target.files[0]) loadFile(e.target.files[0]); e.target.value = ''; });
+
+  var dragDepth = 0;
+  window.addEventListener('dragenter', function (e) { e.preventDefault(); dragDepth++; $('drop').classList.add('on'); });
+  window.addEventListener('dragleave', function (e) { e.preventDefault(); if (--dragDepth <= 0) { dragDepth = 0; $('drop').classList.remove('on'); } });
+  window.addEventListener('dragover', function (e) { e.preventDefault(); });
+  window.addEventListener('drop', function (e) {
+    e.preventDefault(); dragDepth = 0; $('drop').classList.remove('on');
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) loadFile(f);
+  });
+
+  // controls
+  function togglePause() {
+    if (player.running) { player.stop(); $('pause').textContent = 'Resume'; }
+    else { player.start(); $('pause').textContent = 'Pause'; }
+  }
+  $('pause').addEventListener('click', togglePause);
+  $('restart').addEventListener('click', function () { player.reset(); if (!player.running) player.render(); });
+  $('speed').addEventListener('input', function (e) { player.timeScale = +e.target.value; $('speedv').textContent = (+e.target.value).toFixed(1) + '×'; });
+  $('zoom').addEventListener('input', function (e) { player.zoom = +e.target.value; $('zoomv').textContent = (+e.target.value).toFixed(1) + '×'; if (!player.running) player.render(); });
+  $('bg').addEventListener('change', function (e) { stage.className = e.target.value; });
+  $('origin').addEventListener('change', function (e) { player.originMode = e.target.value; if (!player.running) player.render(); });
+  $('showbg').addEventListener('change', function (e) { player.showBackground = e.target.checked; if (!player.running) player.render(); });
+  $('smooth').addEventListener('change', function (e) { player.forceSmoothing = e.target.checked; if (!player.running) player.render(); });
+  $('rev').addEventListener('change', function (e) { player.reverseOrder = e.target.checked; if (!player.running) player.render(); });
+  $('center').addEventListener('click', function () { player.originX = player.originY = undefined; if (!player.running) player.render(); });
+  $('min').addEventListener('click', function () { var p = $('panel'); p.classList.toggle('min'); $('min').textContent = p.classList.contains('min') ? '+' : '–'; });
+  canvas.addEventListener('click', function (e) {
+    var r = canvas.getBoundingClientRect();
+    player.originMode = 'center'; $('origin').value = 'center';
+    player.originX = e.clientX - r.left; player.originY = e.clientY - r.top;
+    if (!player.running) player.render();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.target && /select|input/i.test(e.target.tagName) && e.key !== ' ') return;
+    if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+    else if (e.key === 'r' || e.key === 'R') { player.reset(); }
+  });
+
+  // stats
+  var lastStat = 0;
+  player.onframe = function () {
+    var now = performance.now();
+    if (now - lastStat > 400) {
+      lastStat = now;
+      $('fps').textContent = Math.round(player.fpsSmooth) + ' fps';
+      $('np').textContent = player.numParticles + ' particles';
+    }
+  };
+
+  resize();
+  // pick the first embedded sim (the coin shower with the star, if present) and go
+  var start = 0;
+  EMBEDDED_SIMS.forEach(function (s, i) { if (/with-star/i.test(s.name)) start = i; });
+  sel.value = start;
+  selectEmbedded(start);
+
+  // handy for debugging from the console
+  window.player = player;
+})();
+</script>
+</body>
+</html>

@@ -1,232 +1,185 @@
 <!DOCTYPE html>
 <html><head>
     <meta http-equiv="content-type" content="text/html; charset=UTF-8"/>
-    <title>sketch.js » Basic Example</title>
+    <title>Stardust.js » HTML Forms Example</title>
     <style type="text/css">
         html, body {
             background: #222;
             margin: 0px;
             padding: 0px;
         }
+        canvas.fx {
+            border: 2px solid white;
+            position: fixed;
+            display: block;
+            top: 0px;
+            pointer-events: none;
+        }
+        #error { display: none; color: #f66; font-weight: bold; }
     </style>
 </head><body>
-	<div style="width:400px; background-color:white;padding:20px;border:1px dashed blue;">
-		<h2>HTML Forms</h2>
+    <div style="width:400px; background-color:white;padding:20px;border:1px dashed blue;">
+        <h2>HTML Forms</h2>
 
         First name:<br>
         <input type="text" name="firstname" value="Foo">
         <br>
         Last name:<br>
-        <input type="text" name="lastname" value="Bar" onclick="demo.mousedown()">
+        <input type="text" name="lastname" value="Bar">
         <br><br>
-		<input id="quantity" type="text" name="quantity" value="30">
-        <button id="coolButton" type="submit" value="Submit" onClick="demo.burst(getElementById('coolButton'))" style="width:100px;height:100px">Submit</button>
-        <button id="coolButton2" type="submit" value="Submit" onMouseDown="demo.pingDown(getElementById('coolButton2'))" onMouseUp="demo.pingUp(getElementById('coolButton2'))" style="width:100px;height:100px">Ping</button>        <p>If you click the "Submit" button, particles spawn from the button dimensions, going in all directions, but being attracted to a specific position.</p>
+        <input id="quantity" type="text" name="quantity" value="30">
+        <button id="coolButton" type="submit" value="Submit" style="width:100px;height:100px">Submit</button>
+        <button id="coolButton2" type="submit" value="Submit" style="width:100px;height:100px">Ping</button>
+        <p>If you click the "Submit" button, particles spawn from the button dimensions, going in all directions, but being attracted to a specific position.</p>
         <p>Hold "Ping" down to see it's effect</p>
         <div>Coin Icon: https://pngtree.com/freepng/cartoon-gold-coin-decoration-pattern_2957009.html</div>
-		<div id="sizeInfo"></div>
-
+        <div id="sizeInfo"></div>
+        <div id="error"></div>
     </div>
-    
-    <canvas id="canv" style="border:2px solid white;position:fixed;display:block;top:0px;pointer-events:none;"/>
-    <script src="scripts/stardust/libs/sketch.js"></script>
-    <script src="scripts/stardust/clocks/Clock.js"></script>
-    <script src="scripts/stardust/clocks/ImpulseClock.js"></script>
-    <script src="scripts/stardust/emitters/Emitter.js"></script>
-    <script src="scripts/stardust/Stardust.js"></script>
+
+    <!-- two layers: one Stardust Player per .sde (a Player clears its canvas every frame) -->
+    <canvas id="pingCanvas" class="fx"></canvas>
+    <canvas id="burstCanvas" class="fx"></canvas>
+
+    <script src="stardust.js"></script>
     <script>
-    var img = new Image;
-    img.src = "images/coin.png";
-    var img2 = new Image;
-    img2.src = "images/whiteRing.png";
-    
-    // ----------------------------------------
-    // Example
-    // ----------------------------------------
+    (function () {
+        // ----------------------------------------
+        // Settings
+        // ----------------------------------------
+        var MAX_PARTICLES = 280;   // across both effects; the oldest particles are dropped first
 
-    var MAX_PARTICLES = 280;
-    var COLOURS = [ '#69D2E7', '#A7DBD8', '#E0E4CC', '#F38630', '#FA6900', '#FF4E50', '#F9D423' ];
-    console.log('hi');
-    var particles = [];
-    var pool = [];
-    
-    var myCanvas = document.getElementById('canv');
-    var myCtx = myCanvas.getContext('2d');
+        var canvases = [document.getElementById('pingCanvas'), document.getElementById('burstCanvas')];
+        var sizeInfo = document.getElementById('sizeInfo');
+        var quantity = document.getElementById('quantity');
 
-    function Stardust() {};
-    Stardust.prototype = {
+        var allEmitters = [];      // every emitter of every player, for the MAX_PARTICLES cap
+        var serial = 0;
 
-        init: function(){
-            console.log("Hey from stardust");
+        function resize() {
+            for (var i = 0; i < canvases.length; i++) {
+                canvases[i].width = window.innerWidth;
+                canvases[i].height = window.innerHeight;
+            }
+            sizeInfo.innerHTML = 'Size: ' + window.innerWidth + ' x ' + window.innerHeight;
         }
-    };
-    var clock;
-    var clock2;
-    var emitter;
-    var emitter2;
-    Stardust.tempStart = function()
-    {
-        clock = new ImpulseClock();
-        emitter = new Emitter(clock);
-        emitter.active = false;
-        emitter.tempSpawner = demoBurst;
-        clock2 = new ImpulseClock();
-        emitter2 = new Emitter(clock2);
-        emitter2.active = false;
-        emitter2.tempSpawner = demoPing;
-    };
+        window.addEventListener('resize', resize);
+        resize();
 
-    demoBurst = function (x, y){
-        
-        var particleAmount, j;
+        // ----------------------------------------
+        // Helpers
+        // ----------------------------------------
 
-        particleAmount = document.getElementById("quantity").value;//random( 10, 40 );
-        for ( j = 0; j < particleAmount; j++ )
-        {
-            var nx = x + random(-emitter.particleSpawnVariationX, emitter.particleSpawnVariationX);
-            var ny = y + random(-emitter.particleSpawnVariationY, emitter.particleSpawnVariationY);
-            
-                
-            var particle, theta, force;
-
-            if ( particles.length >= MAX_PARTICLES )
-                pool.push( particles.shift() );
-
-            particle = pool.length ? pool.pop() : new Particle();
-            particle.init();
-            particle.x = nx;
-            particle.y = ny;
-            particle.vx = random(-30, 30);
-            particle.vy = random(-30, 30);
-            particle.img = img;
-            particle.width = img.width;
-            particle.height = img.height;
-            particle.blendMode = 'source-over';
-            particle.initialScale = particle.scale = random(0.2, 0.3);
-            this.initLife = this.life = 2;
-
-            particle.color = random( COLOURS );
-
-            particles.push( particle );
+        // Particles are emitted relative to the emitter's `pos`, which is where the button is.
+        // createParticles() is used by both the clock (ping) and Player.burst() (coins), so patching
+        // it covers both. It also enforces MAX_PARTICLES.
+        function hookEmitter(em) {
+            var create = em.createParticles;
+            em.pos = { x: 0, y: 0 };
+            em.createParticles = function (count) {
+                var fresh = create.call(this, count);
+                for (var i = 0; i < fresh.length; i++) {
+                    fresh[i].x += this.pos.x;
+                    fresh[i].y += this.pos.y;
+                    fresh[i].serial = ++serial;
+                }
+                trim();
+                return fresh;
+            };
+            allEmitters.push(em);
         }
-    }
-    demoPing = function (x, y){
-        
-        var particleAmount, j;
 
-        particleAmount = 1;//random( 10, 40 );
-        for ( j = 0; j < particleAmount; j++ )
-        {
-                
-            var particle, theta, force;
-
-            if ( particles.length >= MAX_PARTICLES )
-                pool.push( particles.shift() );
-
-            particle = pool.length ? pool.pop() : new Particle();
-            particle.init();
-            particle.x = x;
-            particle.y = y;
-            particle.vx = 0;
-            particle.vy = 0;
-            particle.img = img2;
-            particle.width = img2.width;
-            particle.height = img2.height;
-            particle.blendMode = 'source-over';
-            particle.attractable = false;
-            particle.initialScale = particle.scale = random(0.2, 0.3);
-            this.initLife = this.life = 2;
-
-            particle.color = random( COLOURS );
-
-            particles.push( particle );
+        function total() {
+            var n = 0;
+            for (var i = 0; i < allEmitters.length; i++) n += allEmitters[i].particles.length;
+            return n;
         }
-    }
 
-    var demo = Sketch.create({
-    
-        //type: Sketch.DOM,
-        type: Sketch.CANVAS,
-		fullscreen: true,
-        //container: document.getElementById( 'container' ),
-        container: myCanvas,
-        //element: canvas,
-        context: myCtx,
-        retina: false
-    });
-    
-    document.getElementById('sizeInfo').innerHTML = "Size: "+demo.width+" x "+demo.height;
-    
-    demo.setup = function()
-    {
-        //StardustRenderer.init(10, 5000);//memory in exchange for prebuffering
-        //player = new SimPlayer();
-        //loader = new SimLoader();
-        Stardust.tempStart();
-        //loader.loadSim(asset);
-    };
-
-    var lastTick = 0;
-    var elapsed = 0;
-
-    demo.update = function() {
-        currentTime = new Date();
-        elapsed = currentTime - lastTick;
-
-        if(emitter != null)
-            emitter.step2(elapsed);
-        if(emitter2 != null)
-            emitter2.step2(elapsed);
-
-        lastTick = currentTime;
-
-        var i, particle;
-
-        for ( i = particles.length - 1; i >= 0; i-- ) {
-
-            particle = particles[i];
-
-            if ( particle.alive ) particle.move();
-            else pool.push( particles.splice( i, 1 )[0] );
+        function trim() {
+            while (total() > MAX_PARTICLES) {
+                var oldest = null;
+                for (var i = 0; i < allEmitters.length; i++) {
+                    var first = allEmitters[i].particles[0];
+                    if (first && (!oldest || first.serial < oldest.particles[0].serial)) oldest = allEmitters[i];
+                }
+                oldest.pool.push(oldest.particles.shift());
+            }
         }
-    };
 
-    demo.draw = function() {
-
-        //demo.globalCompositeOperation  = 'lighter';
-        demo.globalCompositeOperation  = 'source-over';
-        
-        for ( var i = particles.length - 1; i >= 0; i-- ) {
-            //demo.globalCompositeOperation  = particles[i].blendMode;// 'source-over';
-            particles[i].draw( demo );
+        function center(dom) {
+            var rect = dom.getBoundingClientRect();
+            return { x: (rect.right - rect.left) / 2 + rect.left, y: (rect.bottom - rect.top) / 2 + rect.top };
         }
-    };
 
-    
-    demo.burst = function (dom){
-        console.log('on');
-        var particleAmount, j, x, y;
-        var rect = dom.getBoundingClientRect();
-        x = (rect.right - rect.left)/2 + rect.left;
-        y = (rect.bottom - rect.top)/2 + rect.top;
-        
-        emitter.x = x;//emitter's position
-        emitter.y = y;
+        // one Player (= one .sde) per canvas; draws in page pixels, (0,0) = top left of the page
+        function loadPlayer(url, canvas) {
+            return Stardust.Sim.fromUrl(url).then(function (sim) {
+                var player = new Stardust.Player(canvas);
+                player.originMode = 'center';
+                player.originX = 0;
+                player.originY = 0;
+                player.zoom = 1;
+                player.load(sim);
+                player.emitters.forEach(hookEmitter);
+                player.emitters.forEach(function (em) { em.active = false; });   // we trigger them ourselves
+                player.start();
+                if (sim.warnings.length) console.warn(url, sim.warnings);
+                return player;
+            });
+        }
 
-        emitter.particleSpawnVariationY = 70;//variation in particle spawn position
-        emitter.particleSpawnVariationY = 70;
-        emitter.spawnAtLeast = 2;//even while inactive.. this should go on the timer check not inactive check
-    }
+        // ----------------------------------------
+        // Burst ("Submit"): two spawns of `quantity` coins, one per frame
+        // ----------------------------------------
+        var burstPlayer, pingPlayer;
+        var burstsLeft = 0;
 
-    demo.pingDown = function (dom){
-        var rect = dom.getBoundingClientRect();
-        emitter2.x = (rect.right - rect.left)/2 + rect.left;
-        emitter2.y = (rect.bottom - rect.top)/2 + rect.top;
+        document.getElementById('coolButton').addEventListener('click', function () {
+            if (!burstPlayer) return;
+            burstPlayer.emitters[0].pos = center(this);
+            burstsLeft = 2;
+        });
 
-        emitter2.active = true;
-    }
-    demo.pingUp = function (dom){
-        emitter2.active = false;
-    }
+        function stepBursts() {
+            if (burstsLeft > 0) {
+                burstsLeft--;
+                burstPlayer.burst('1', Math.ceil(parseFloat(quantity.value)) || 0);
+            }
+        }
+
+        // ----------------------------------------
+        // Ping: while held, the emitter is active and its SteadyClock spawns rings
+        // ----------------------------------------
+        var pingButton = document.getElementById('coolButton2');
+
+        function pingDown() {
+            if (!pingPlayer) return;
+            pingPlayer.emitters[0].pos = center(pingButton);
+            pingPlayer.emitters[0].active = true;
+        }
+        function pingUp() {
+            if (pingPlayer) pingPlayer.emitters[0].active = false;
+        }
+        pingButton.addEventListener('mousedown', pingDown);
+        document.addEventListener('mouseup', pingUp);   // also when released outside the button
+        window.addEventListener('blur', pingUp);
+
+        // ----------------------------------------
+        // Go
+        // ----------------------------------------
+        Promise.all([
+            loadPlayer('sdes/burst.sde', document.getElementById('burstCanvas')),
+            loadPlayer('sdes/ping.sde', document.getElementById('pingCanvas'))
+        ]).then(function (players) {
+            burstPlayer = players[0];
+            pingPlayer = players[1];
+            burstPlayer.onframe = stepBursts;
+        }).catch(function (e) {
+            var err = document.getElementById('error');
+            err.style.display = 'block';
+            err.textContent = 'Could not load the .sde files (' + e.message + '). Open this page through a web server (e.g. "npx serve" or VS Code Live Server); browsers block file:// requests.';
+            console.error(e);
+        });
+    })();
     </script>
 </body></html>

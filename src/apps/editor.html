@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stardust canvas editor</title>
+<style>
+  :root { --bg:#14161b; --panel:#1b1e26; --panel2:#222733; --line:rgba(255,255,255,.09); --text:#d7dbe3; --dim:#8b93a3; --accent:#ffb547; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; overflow:hidden; font:12.5px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--text); background:var(--bg); }
+  #app { display:grid; grid-template-columns:190px 1fr 340px; grid-template-rows:42px 1fr; height:100%; }
+  #top { grid-column:1/4; display:flex; align-items:center; gap:6px; padding:0 10px; background:var(--panel); border-bottom:1px solid var(--line); overflow-x:auto; white-space:nowrap; }
+  #top .brand { font-weight:600; display:flex; align-items:center; gap:7px; margin-right:6px; }
+  #top .brand i { width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent); }
+  #top .sp { flex:1; }
+  #left { background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0; }
+  #left h3 { margin:0; padding:9px 10px 6px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); }
+  #elist { overflow:auto; flex:1; padding:0 6px; }
+  .eitem { display:flex; align-items:center; gap:7px; padding:5px 6px; border-radius:7px; cursor:pointer; border:1px solid transparent; }
+  .eitem:hover { background:var(--panel2); } .eitem.on { background:var(--panel2); border-color:var(--accent); }
+  .eitem canvas { border-radius:5px; flex:none; } .ename { flex:1; }
+  #left .foot { padding:8px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:6px; }
+  #stage { position:relative; overflow:hidden; background:radial-gradient(ellipse at 50% 40%,#232834 0%,#14161b 70%); min-width:0; }
+  #stage.light { background:#e9ebef; } #stage.black { background:#000; }
+  #stage.checker { background-color:#2a2d35; background-image:linear-gradient(45deg,#343843 25%,transparent 25%,transparent 75%,#343843 75%),linear-gradient(45deg,#343843 25%,transparent 25%,transparent 75%,#343843 75%); background-size:24px 24px; background-position:0 0,12px 12px; }
+  #stage canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  #gz { cursor:grab; touch-action:none; }
+  #vbar { position:absolute; left:10px; bottom:10px; display:flex; gap:10px; align-items:center; background:rgba(20,22,27,.82); border:1px solid var(--line); padding:5px 9px; border-radius:8px; flex-wrap:wrap; max-width:calc(100% - 20px); }
+  #vbar label { display:flex; gap:4px; align-items:center; color:var(--dim); cursor:pointer; }
+  #stats,#coords { position:absolute; right:10px; top:8px; color:var(--dim); font-variant-numeric:tabular-nums; background:rgba(20,22,27,.7); padding:2px 8px; border-radius:6px; pointer-events:none; }
+  #coords { top:32px; }
+  #warn { position:absolute; left:10px; top:8px; max-width:50%; white-space:pre-line; color:#f0b46a; font-size:12px; display:none; background:rgba(20,22,27,.8); padding:5px 9px; border-radius:6px; }
+  #msg { position:absolute; left:50%; top:12px; transform:translateX(-50%); padding:7px 14px; border-radius:8px; display:none; z-index:5; }
+  #msg.ok { background:#1d3a28; border:1px solid #2f7a4a; color:#b6f0c8; } #msg.err { background:#3a1d1d; border:1px solid #7a3535; color:#ffb3b3; }
+  #right { background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; min-height:0; }
+  #inspector { overflow:auto; flex:1; padding:6px 8px 40px; }
+  .empty { color:var(--dim); padding:20px; }
+  details.sec { margin-bottom:6px; border:1px solid var(--line); border-radius:8px; background:var(--panel2); }
+  details.sec > summary { padding:7px 10px; cursor:pointer; font-weight:600; user-select:none; }
+  details.sec > :not(summary) { margin:0 8px 8px; }
+  .prow { display:flex; align-items:center; gap:6px; margin:3px 0; }
+  .prow label { width:92px; flex:none; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chkrow label { width:auto; color:var(--text); cursor:pointer; }
+  .prow input[type=range] { flex:1; min-width:0; accent-color:var(--accent); height:16px; }
+  input.num.txt { width:120px; text-align:left; }
+  input.num { width:62px; background:#14161b; color:var(--text); border:1px solid var(--line); border-radius:5px; padding:2px 4px; font:inherit; text-align:right; }
+  input[type=checkbox] { accent-color:var(--accent); }
+  input[type=color] { width:30px; height:22px; padding:0; border:1px solid var(--line); background:none; border-radius:4px; }
+  select,button { font:inherit; color:var(--text); background:#2a3040; border:1px solid var(--line); border-radius:6px; padding:4px 8px; }
+  select { min-width:0; } .prow select { flex:1; }
+  button { cursor:pointer; } button:hover:not(:disabled),select:hover { border-color:rgba(255,255,255,.25); } button:disabled { opacity:.35; cursor:default; }
+  button.primary { background:var(--accent); color:#1a1405; border-color:transparent; font-weight:600; }
+  button.mini { padding:0 6px; line-height:18px; background:transparent; border-color:transparent; color:var(--dim); } button.mini:hover { color:#fff; }
+  button.add,select.addsel { width:100%; margin-top:6px; background:transparent; border:1px dashed rgba(255,255,255,.2); color:var(--dim); text-align:left; }
+  button.fire { background:#4a2d12; border-color:#8a5320; color:#ffcf99; padding:2px 8px; }
+  .card { border:1px solid var(--line); border-radius:7px; margin:5px 0; background:#1e222c; } .card.selected { border-color:var(--accent); }
+  .cardhead { display:flex; align-items:center; gap:6px; padding:5px 7px; cursor:pointer; user-select:none; } .ctitle { flex:1; font-weight:500; } .arrow { color:var(--dim); width:10px; }
+  .cardbody { padding:2px 9px 8px; } .desc { color:var(--dim); font-size:11.5px; margin:3px 0 6px; }
+  .group { margin:6px 0; } .glabel { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin-bottom:2px; }
+  .sub { border:1px solid var(--line); border-left:3px solid #55607a; border-radius:6px; margin:4px 0; background:#191c24; } .sub.selected { border-left-color:var(--accent); }
+  .subhead { display:flex; align-items:center; gap:6px; padding:3px 6px; cursor:pointer; } .subhead select,.subhead span { flex:1; } .subbody { padding:2px 8px 6px; }
+  .gradbar { height:16px; border-radius:4px; border:1px solid var(--line); margin:2px 0 6px; } .gstop input[type=range] { flex:1; } .tiny { font-size:10.5px; color:var(--dim); }
+  .tex { display:flex; flex-wrap:wrap; gap:6px; } .texitem { position:relative; display:flex; flex-direction:column; align-items:center; background:#14161b; border:1px solid var(--line); border-radius:6px; padding:3px; }
+  .texitem canvas { background:repeating-conic-gradient(#333 0 25%,#222 0 50%) 0 0/8px 8px; border-radius:3px; } .texitem button { position:absolute; top:0; right:0; }
+  #pname { background:#14161b; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:3px 7px; width:140px; font:inherit; }
+  #drop { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(10,12,16,.72); border:2px dashed var(--accent); font-size:20px; color:var(--accent); z-index:10; pointer-events:none; } #drop.on { display:flex; }
+  #help { color:var(--dim); font-size:11.5px; padding:6px 10px; border-top:1px solid var(--line); }
+  input[type=file] { display:none; }
+  #speedw { display:flex; align-items:center; gap:5px; color:var(--dim); } #speed { width:80px; accent-color:var(--accent); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <span class="brand"><i></i>Stardust editor</span>
+    <button id="open" title="Open .sde (or drop it on the window)">Open…</button>
+    <button id="save" class="primary" title="Ctrl+S">Save .sde</button>
+    <input id="pname" title="File name" value="untitled">
+    <select id="examples" title="Start from an example"><option value="">Examples…</option><option value="fire">Fire</option><option value="fountain">Fountain</option><option value="attract">Attraction points</option><option value="firework">Firework (spawn)</option><option value="blank">Blank</option></select>
+    <button id="undo" title="Ctrl+Z">↶ Undo</button><button id="redo" title="Ctrl+Shift+Z">↷ Redo</button>
+    <span class="sp"></span>
+    <button id="pause">Pause</button><button id="restart">Restart</button>
+    <span id="speedw">speed <input id="speed" type="range" min="0.1" max="3" step="0.05" value="1"><span id="speedv">1.00×</span></span>
+    <select id="bgstyle" title="Editor background"><option value="">Dark</option><option value="black">Black</option><option value="light">Light</option><option value="checker">Checker</option></select>
+  </div>
+  <div id="left">
+    <h3>Emitters</h3>
+    <div id="elist"></div>
+    <div class="foot">
+      <button id="newem">＋ New emitter</button>
+      <button id="cloneem">Clone emitter</button>
+      <button id="setbg" title="Also used as the test sprite for Image-mask zones">Set test background / sprite…</button>
+      <div id="bgrow" style="display:none;gap:6px;align-items:center;flex-wrap:wrap"><label class="tiny"><input type="checkbox" id="showbg" checked> show</label><label class="tiny" title="Backgrounds are only a preview aid; leave this off for the final export"><input type="checkbox" id="inclbg"> save in file</label><button id="rmbg" class="mini">remove</button></div>
+    </div>
+  </div>
+  <div id="stage">
+    <canvas id="c"></canvas><canvas id="gz"></canvas>
+    <div id="warn"></div><div id="stats"></div><div id="coords"></div><div id="msg"></div>
+    <div id="vbar">
+      <label><input type="checkbox" id="gizmos" checked> Gizmos</label>
+      <label title="Off: only the selected card is drawn"><input type="checkbox" id="showall" checked> All shapes</label>
+      <label><input type="checkbox" id="smooth"> Smooth</label>
+      <span id="zoomv" class="tiny">100%</span><button id="resetview" class="mini">reset view</button>
+      <span class="tiny">drag = pan · wheel = zoom · click = burst/fire · drag squares to edit (Shift = snap 10)</span>
+    </div>
+  </div>
+  <div id="right"><div id="inspector"></div></div>
+</div>
+<div id="drop">Drop a .sde or an image</div>
+<input type="file" id="sdefile" accept=".sde,.zip" multiple><input type="file" id="imgfile" accept="image/*" multiple><input type="file" id="bgfile" accept="image/*">
+<script>
+window.__EXAMPLES__ = /*__EXAMPLES__*/;
+</script>
+<script>
+/*__STARDUST__*/
+</script>
+<script>
+/*__CORE__*/
+</script>
+<script>
+/*__UI__*/
+</script>
+</body>
+</html>
